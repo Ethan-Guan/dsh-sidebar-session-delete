@@ -66,6 +66,9 @@ test("registers the delete menu entry and the confirmation overlay", async () =>
 	const overlay = registrations.find((row) => row.name === "shell.overlay");
 	assert.ok(overlay !== undefined, "must register the confirmation dialog into shell.overlay");
 	assert.equal(overlay.id, "session-delete-confirm");
+	const mark = registrations.find((row) => row.name === "sidebar.session.row.trailing");
+	assert.ok(mark !== undefined, "must register the selection mark into the row trailing seat");
+	assert.equal(mark.id, "session-delete-selection");
 });
 
 test("pings the Host heartbeat when applied", async () => {

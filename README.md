@@ -16,17 +16,38 @@ Alternatively `git clone` the repository and pick the local directory in
 **Add plugin**. Confirm the **Delete session** row is enabled in the plugin
 list; a newly added plugin usually needs one DSH restart to load its module.
 
+## Multi-select delete
+
+The toolbar at the right of the Workspaces section gains a **multi-select**
+button:
+
+- Click it to enter selection mode; clicking any Session row toggles that row
+  instead of opening it. Selected rows are outlined and the trailing seat shows
+  a check mark.
+- A floating bar shows how many rows are selected and offers **全选**
+  (select every rendered Session row), **删除** (confirm and delete the
+  selection) and **取消**. `Esc` also leaves selection mode.
+- The Client posts the whole selection to `POST /api/session-delete/batch`.
+  The Host deletes one Session at a time and reports each outcome, so a running
+  Session is refused while the rest still go; failed rows stay selected and the
+  dialog names the failure.
+- The workspace toolbar exposes no client slot, so the button is mounted into
+  the toolbar's stable `data-sidebar-workspace-header` marker (and the bar into
+  the same section root). A DSH release that renames that marker needs a small
+  adaptation in `lib/client.js`.
 
 ## What it does
 
 - **Client half** (`lib/client.js`): registers one entry into the
   `sidebar.workspaces.session.menu.item` slot (order 440, between *archive* and
-  *copy session id*) and one confirmation dialog into `shell.overlay`. The menu
-  entry opens the dialog; the dialog posts the Session id to the Host and
-  closes. The sidebar updates itself from the Host's live removal events, so a
-  successful delete never reloads the page.
+  *copy session id*), a selection mark into `sidebar.session.row.trailing`, and
+  one confirmation dialog into `shell.overlay`. The menu entry opens the dialog;
+  the dialog posts one or several Session ids to the Host and closes. The
+  sidebar updates itself from the Host's live removal events, so a successful
+  delete never reloads the page.
 - **Host half** (`lib/index.js`): registers the exact `POST /api/session-delete`
-  Fetch route through `connection.fetch.register`. Deleting a Session:
+  and `POST /api/session-delete/batch` Fetch routes through
+  `connection.fetch.register`. Deleting a Session:
   1. refuses a Session with a running turn (stop the work first);
   2. stops the Session's remaining providers (reminders, jobs, idle descendants);
   3. clears the registry-global archive and pin sets;

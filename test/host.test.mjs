@@ -41,7 +41,7 @@ function harness(options = {}) {
 			liveEntryFor: () => ({ id: options.sessionId }),
 			detachEntered: () => { calls.sessionDetach += 1; }
 		},
-		agents: { get: () => options.agent },
+		agents: { get: (sessionId) => (options.agents !== undefined ? options.agents[sessionId] : options.agent) },
 		workspaceRegistry: registry,
 		storageDomain: { get: () => ({ table: () => ({ delete: async (sessionId) => calls.projection.push(sessionId) }) }) },
 		dshHomePath: (...segments) => join(options.home, ...segments),
@@ -66,7 +66,24 @@ function harness(options = {}) {
 	apply(ctx);
 	const route = routes.get("/api/session-delete");
 	assert.ok(route !== undefined, "apply() must register the delete route");
-	return { route, routes, calls };
+	const batch = routes.get("/api/session-delete/batch");
+	assert.ok(batch !== undefined, "apply() must register the batch delete route");
+	return { route, batch, routes, calls };
+}
+
+/**
+ * POST one batch delete request to the captured route.
+ * @param route - captured exact Fetch route.
+ * @param body - request payload.
+ * @returns the JSON response body and status.
+ */
+async function postBatch(route, body) {
+	const request = new Request("http://127.0.0.1:1/api/session-delete/batch", {
+		method: "POST",
+		body: typeof body === "string" ? body : JSON.stringify(body)
+	});
+	const response = await route.fetch(request);
+	return { status: response.status, body: await response.json() };
 }
 
 /**
@@ -228,6 +245,74 @@ test("reports browser-half heartbeats and live sessions", async () => {
 		assert.equal(body.loads, 1);
 		assert.equal(typeof body.lastLoadAt, "number");
 		assert.deepEqual(body.liveSessions, [{ sessionId, status: "idle" }]);
+	} finally {
+		await rm(home, { recursive: true, force: true });
+	}
+});
+
+test("batch-deletes several cold sessions and reports each outcome", async () => {
+	const home = await mkdtemp(join(tmpdir(), "session-delete-test-"));
+	const first = "session-11111111-aaaa-bbbb-cccc-111111111111";
+	const second = "session-22222222-aaaa-bbbb-cccc-222222222222";
+	const firstDir = await makeSessionDir(home, first);
+	const secondDir = await makeSessionDir(home, second);
+	try {
+		const { batch, calls } = harness({ home, sessionId: first, known: true, attachToWorkspace: true });
+		const result = await postBatch(batch, { sessionIds: [first, second] });
+		assert.equal(result.status, 200);
+		assert.equal(result.body.ok, true);
+		assert.equal(result.body.deleted, 2);
+		assert.equal(result.body.failed, 0);
+		assert.deepEqual(result.body.results.map((row) => [row.sessionId, row.ok]), [[first, true], [second, true]]);
+		assert.deepEqual(calls.events, [["api-session/removed", first], ["api-session/removed", second]]);
+		await assert.rejects(stat(firstDir), /ENOENT/);
+		await assert.rejects(stat(secondDir), /ENOENT/);
+	} finally {
+		await rm(home, { recursive: true, force: true });
+	}
+});
+
+test("batch delete keeps deleting after one running session is refused", async () => {
+	const home = await mkdtemp(join(tmpdir(), "session-delete-test-"));
+	const deletable = "session-33333333-aaaa-bbbb-cccc-333333333333";
+	const running = "session-44444444-aaaa-bbbb-cccc-444444444444";
+	await makeSessionDir(home, deletable);
+	const runningDir = await makeSessionDir(home, running);
+	try {
+		const { batch } = harness({
+			home,
+			sessionId: deletable,
+			live: undefined,
+			agents: { [running]: { status: "running" } }
+		});
+		const result = await postBatch(batch, { sessionIds: [deletable, running] });
+		assert.equal(result.status, 200);
+		assert.equal(result.body.ok, true);
+		assert.equal(result.body.deleted, 1);
+		assert.equal(result.body.failed, 1);
+		const refused = result.body.results.find((row) => row.sessionId === running);
+		assert.equal(refused.ok, false);
+		assert.equal(refused.error.code, "session-active");
+		assert.ok((await stat(runningDir)).isDirectory(), "a refused session keeps its log");
+	} finally {
+		await rm(home, { recursive: true, force: true });
+	}
+});
+
+test("batch delete validates its input and deduplicates ids", async () => {
+	const home = await mkdtemp(join(tmpdir(), "session-delete-test-"));
+	const sessionId = "session-55555555-aaaa-bbbb-cccc-555555555555";
+	await makeSessionDir(home, sessionId);
+	try {
+		const { batch } = harness({ home, sessionId });
+		assert.equal((await postBatch(batch, "not json")).status, 400);
+		assert.equal((await postBatch(batch, {})).status, 400);
+		assert.equal((await postBatch(batch, { sessionIds: [] })).status, 400);
+		assert.equal((await postBatch(batch, { sessionIds: ["../etc"] })).status, 400);
+		assert.equal((await postBatch(batch, { sessionIds: "nope" })).status, 400);
+		const deduped = await postBatch(batch, { sessionIds: [sessionId, sessionId] });
+		assert.equal(deduped.status, 200);
+		assert.equal(deduped.body.results.length, 1);
 	} finally {
 		await rm(home, { recursive: true, force: true });
 	}
