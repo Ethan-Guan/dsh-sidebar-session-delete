@@ -22,8 +22,9 @@ The toolbar at the right of the Workspaces section gains a **multi-select**
 button:
 
 - Click it to enter selection mode; clicking any Session row toggles that row
-  instead of opening it. Selected rows are outlined and the trailing seat shows
-  a check mark.
+  instead of opening it. Selected rows are outlined and the leading status cell
+  shows a check circle, which stays visible while the row is hovered (a running
+  row keeps its status dot there; the outline still marks it as selected).
 - A floating bar shows how many rows are selected and offers **全选**
   (select every rendered Session row), **删除** (confirm and delete the
   selection) and **取消**. `Esc` also leaves selection mode.
@@ -40,7 +41,7 @@ button:
 
 - **Client half** (`lib/client.js`): registers one entry into the
   `sidebar.workspaces.session.menu.item` slot (order 440, between *archive* and
-  *copy session id*), a selection mark into `sidebar.session.row.trailing`, and
+  *copy session id*), a selection mark into `sidebar.session.row.leading`, and
   one confirmation dialog into `shell.overlay`. The menu entry opens the dialog;
   the dialog posts one or several Session ids to the Host and closes. The
   sidebar updates itself from the Host's live removal events, so a successful
