@@ -25,7 +25,8 @@ button:
   instead of opening it. Selected rows are outlined and the leading status cell
   shows a check circle, which stays visible while the row is hovered (a running
   row keeps its status dot there; the outline still marks it as selected).
-- A floating bar shows how many rows are selected and offers **全选**
+- A bar docked at the bottom of the Workspaces section shows how many rows
+  are selected and offers **全选**
   (select every rendered Session row), **删除** (confirm and delete the
   selection) and **取消**. `Esc` also leaves selection mode.
 - The Client posts the whole selection to `POST /api/session-delete/batch`.
