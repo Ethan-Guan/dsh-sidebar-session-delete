@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Delete session",
+    "description": "Adds a Delete session entry to the sidebar session menu that permanently removes the session with its logs, archive and pin records; a session with a running turn is refused."
+  }
+}
